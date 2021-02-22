@@ -83,18 +83,13 @@ def trans_comparisons(node):
 
     try:
         field = "ops" if "ops" in node.__dict__ else "operand"
-        # for new_op in ops - set([node.ops[0]]): #bug
-        print("FIELD", field)
-        print("NODE.DICT", node.__dict__)
-        print("NODE.DICT.FIELD", node.__dict__[field])
 
         if field == "ops":
             ignore_ops = set(node.__dict__[field]) #d[field] è lista
         else:
             ignore_ops = set([node.__dict__[field]]) #d[field] è singleton
             
-        for new_op in ops - ignore_ops: #bug
-        # for new_op in ops - set([node.__dict__[field][0]]): #bug
+        for new_op in ops - ignore_ops: #ex-bug
             new_node = deepcopy(node)
             new_node.ops = [new_op]
             out.append(new_node)

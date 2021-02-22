@@ -1,10 +1,9 @@
 import ast
 import astpretty
+import inspect
+import astor
+from dataclasses import dataclass
 from typing import *
-import sys
-
-# from hypothesis import given
-# import hypothesis.strategies as st
 
 def pprint(s):
     tree = ast.parse(s)
@@ -48,12 +47,8 @@ class Mutator():
             return node
         
         field, value = list(ast.iter_fields(node))[loc[0]]
-
-        print(value)
         
         if isinstance(value, list):
-            print("VALUE", value)
-            print("LOC", loc)
 
             item = value[loc[1]]
             if isinstance(item, ast.AST):
@@ -151,27 +146,29 @@ from self_healing.std_mutant_operator import *
 
 class ChangeFooName(ast.NodeTransformer):
     counter = -1
+    living_foos = list()
 
     def __init__(self, original_name: str):
-        self.original_name = original_name
         ChangeFooName.counter += 1
+        self.original_name = original_name
+        ChangeFooName.living_foos.append(self.current_name())
         super().__init__()
+
+    def current_name(self):
+        return self.original_name + "_" + str(ChangeFooName.counter)
         
     def visit_FunctionDef(self, node):
         if node.name == self.original_name:
-            node.name = self.original_name + "_" + str(ChangeFooName.counter)
+            node.name = self.current_name()
         return node
 
     def visit_Name(self, node):
         if node.id == self.original_name:
-            node.id = self.original_name + "_" + str(ChangeFooName.counter)
+            node.id = self.current_name()
         return node
 
-    def current_name(self):
-        return self.original_name + "_" + str(ChangeFooName.counter)
-
     
-class SelfHealer(object):
+class SelfHealer():
     def __init__(self, mutators, original_name_foo=None):
         self.mutators = mutators
         self.foo_name = original_name_foo
@@ -198,9 +195,6 @@ class SelfHealer(object):
 
 # =========================================================== #
 
-import inspect
-import astor
-import astunparse
 
 m1 = Mutator(check_Binop_math, trans_Binop_math)
 m2 = Mutator(check_Binop_left_right, trans_Binop_left_right)
@@ -209,65 +203,15 @@ m4 = Mutator(check_0_1, trans_0_1)
 m5 = Mutator(check_negate_if, trans_negate_if)
 m6 = Mutator(check_comparisons, trans_comparisons)
 
-
+default_mutators = [m1,m2,m3,m4,m5,m6]
 
 # =========================================================== #
 # =========================================================== #
 
 
-# Esempio di funzione da mutare
-def sort(ls: list) -> list:
-    for i in range(len(ls)):
-        minimum, minimum_idx = ls[i], i
-
-        for idx in range(i+1, len(ls)*0):
-        # for idx in range(i+1, len(ls)): #corretto
-            if ls[idx] >= minimum:
-            # if ls[idx] <= minimum: #corretto
-                minimum, minimum_idx = ls[idx], idx
-
-        temp = ls[i]
-        ls[i] = ls[minimum_idx]
-        ls[minimum_idx] = temp
-
-    return ls
-
-# Proprietà da testare via PBT
-def is_sorted(ls):
-    if len(ls) <= 1:
-        return True
-    
-    if ls[0] <= ls[1]:
-        return is_sorted(ls[1:])
-
-    return False
-
-
-# PBT framework costruito a caso
-def pbt(sort_func, iters=100):
-    import random
-    result, num_passed = True, 0
-    
-    for _ in range(iters):
-        length = random.randint(0, 20)
-        lista  = [random.randint(-999999,999999) for _ in range(length)]
-
-        try:
-            if not is_sorted(sort_func(lista)):
-                result = False
-            else:
-                num_passed += 1
-        except Exception as e:
-            result = False
-            num_passed -= 1
-            
-    return (result, num_passed/iters)
-
-
-from dataclasses import dataclass
 
 @dataclass
-class Func:
+class RichFunction:
     func: Callable
     name: str
     src_code: str
@@ -278,11 +222,13 @@ class Func:
         return f"{self.name} - {self.score}"
 
 
-micio = Func(sort, "sort", inspect.getsource(sort), None, 0)
 
-def heal(foo, debug=False):
+
+def single_heal(foo: RichFunction, mutators: List[Mutator],
+                pbt: Callable, debug=False):
+    """ This function performs a round of mutation on a function foo. """
+    
     src_code = foo.src_code
-
     tree     = ast.parse(src_code)
     sh       = SelfHealer([m1,m2,m3,m4,m5,m6],
                           original_name_foo=foo.name)
@@ -325,21 +271,20 @@ def heal(foo, debug=False):
                 print(f"{new_fname} FAIL - SCORE IS {score}")
 
         print(f"Working on {new_fname}")
-        stats[func] = Func(func=func,
-                           name=new_fname,
-                           src_code=new_src_code,
-                           ast=None,
-                           score=score)
+        stats[func] = RichFunction(func=func,
+                                   name=new_fname,
+                                   src_code=new_src_code,
+                                   ast=None,
+                                   score=score)
 
     return (found_correct, stats)
         
 
-def hospitalization(foo, max_iters=2):
-    # print(foo)
-    # print(foo.func)
-    # print([g for g in globals() if g.startswith("sort")])
+def hospitalization(foo: RichFunction, mutators: List[Mutator],
+                    pbt: Callable, max_iters=2):
+    """ Multiple rounds of healing. """
     
-    found_correct, today_stats = heal(foo)
+    found_correct, today_stats = single_heal(foo, mutators, pbt)
 
     sorted_foos = sorted(today_stats.values(),
                          key=lambda nt: nt.score, reverse=True)
@@ -347,16 +292,21 @@ def hospitalization(foo, max_iters=2):
 
     if found_correct:
         return [sorted_foos[0]]
-    if max_iters == 0:
+    if max_iters <= 0:
         return [sorted_foos[0]]
     
     # Qua potresi eliminare da glovals() le foos che non usi più...
 
     results = list()
     for chosen_foo in sorted_foos:
-        rec_out = hospitalization(chosen_foo, max_iters=max_iters-1)
+        rec_out = hospitalization(chosen_foo, mutators, pbt, max_iters=max_iters-1)
         results.append(rec_out)
-    return results
+
+    flatten_results = [r for r_ in results for r in r_]
+    perfect_scores = [r for r in flatten_results if r.score > 0.99]
+    if perfect_scores:
+        return perfect_scores
+    return sorted(flatten_results, key=lambda x: x[0].score)
     
 # heal(sort, "sort")
 
