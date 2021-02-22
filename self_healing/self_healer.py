@@ -1,6 +1,7 @@
 import ast
 import astpretty
 from typing import *
+import sys
 
 # from hypothesis import given
 # import hypothesis.strategies as st
@@ -74,7 +75,10 @@ class Mutator():
             new_nodes = dict()
             for k, v in self.retrieve_all_locations(tree, self.found).items():
                 new_nodes[k] = self.trans(v)
+
+            self.found = list()
             return new_nodes
+
         except Exception as e:
             print("errore grave")
             print(pprint(tree))
@@ -143,6 +147,7 @@ class Mutator():
 # =========================================================== #
 
 from self_healing.std_mutant_operator import *
+
 
 class ChangeFooName(ast.NodeTransformer):
     counter = -1
@@ -215,7 +220,7 @@ def sort(ls: list) -> list:
     for i in range(len(ls)):
         minimum, minimum_idx = ls[i], i
 
-        for idx in range(i+1, len(ls)-i):
+        for idx in range(i+1, len(ls)*0):
         # for idx in range(i+1, len(ls)): #corretto
             if ls[idx] >= minimum:
             # if ls[idx] <= minimum: #corretto
@@ -285,10 +290,7 @@ def heal(foo, debug=False):
     new_srcs = list()
     for (new_name, m) in sh.gather_all_mutants(tree):
         new_srcs.append((new_name, astor.to_source(m)))
-        
-    # new_srcs = [(new_name, astor.to_source(m))
-    #               for (new_name, m) in sh.gather_all_mutants(tree)]
-
+    
     stats = dict()
     found_correct = False
     
@@ -315,7 +317,6 @@ def heal(foo, debug=False):
         if seems_correct:
             print(new_fname)
             print(new_src_code)
-            print("WOOOOOOOOOOOOO")
             print(f"{new_fname} SUCCESSFUL - SCORE IS {score}")
             found_correct = True
             
@@ -329,16 +330,14 @@ def heal(foo, debug=False):
                            src_code=new_src_code,
                            ast=None,
                            score=score)
-        
-        # stats[func] = score
 
     return (found_correct, stats)
         
 
 def hospitalization(foo, max_iters=2):
-    print(foo)
-    print(foo.func)
-    print([g for g in globals() if g.startswith("sort")])
+    # print(foo)
+    # print(foo.func)
+    # print([g for g in globals() if g.startswith("sort")])
     
     found_correct, today_stats = heal(foo)
 
