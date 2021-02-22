@@ -2,8 +2,8 @@ from self_healing.self_healer import RichFunction, Mutator, single_heal, hospita
 from self_healing.std_mutant_operator import *
 import inspect
 
-# What follows is an incorrect implementation of a selection sort.
-# Two bugs 
+# What follows is an incorrect implementation of a selection sort; it contains
+# two bugs (that I can see :-))
 def sort(ls: list) -> list:
     for i in range(len(ls)):
         minimum, minimum_idx = ls[i], i
@@ -56,16 +56,18 @@ def pbt(sort_func, iters=100):
             
     return (result, num_passed/iters)
 
+
 # We then wrap our original `sort` in a class containing some meta
 # information about `sort`, such as its source code (represented as
 # a string), its name and its fitness score (more on that later)
 rich_sort_function = RichFunction(sort, "sort", inspect.getsource(sort), None, 0)
 
+
 # How will we mutate our (enriched) `sort` function? We need to describe
 # a number of mutant operators, which encode what and how we are going to
 # mutate. The following are built-ins, but more operators can be expressed
 # using the (admittedly not user-frendly) AST API.
-m1 = Mutator(check_Binop_math, trans_Binop_math)
+m1 = Mutator(check_Binop_math, trans_Binop_math) 
 m2 = Mutator(check_Binop_left_right, trans_Binop_left_right)
 m3 = Mutator(check_true_false, trans_true_false)
 m4 = Mutator(check_0_1, trans_0_1)

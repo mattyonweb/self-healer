@@ -16,12 +16,22 @@ def pprint(s):
 Coord = List[int]
 
 class Mutator():
+    """ This class basically implements a mutant operator. It is parametrized
+by two important Callables:
+
+- A `check` function, which checks whether a given AST is a suitable
+for mutation
+- A `trans` function, which describes how to transform the AST 
+described by `check` into new ASTs (which we will call "mutant")
+
+This class also implements all the methods needed to perform this mutations.
+"""
     def __init__(self,
                  check: Callable[[ast.AST], bool],
                  trans: Callable[[ast.AST], List[ast.AST]]):
         self.check = check
         self.trans = trans
-        self.found: List[Coord] = list()
+        self.found: List[Coord] = list() # Ricorda di svuotarla!
         
     def find_locations(self, node: ast.AST, current_loc: Coord) -> None:
         """ Recursive search of locations, according to the 
@@ -71,7 +81,7 @@ class Mutator():
             for k, v in self.retrieve_all_locations(tree, self.found).items():
                 new_nodes[k] = self.trans(v)
 
-            self.found = list()
+            self.found = list() #fundamental!
             return new_nodes
 
         except Exception as e:
@@ -145,6 +155,8 @@ from self_healing.std_mutant_operator import *
 
 
 class ChangeFooName(ast.NodeTransformer):
+    """ This class is a utility class to give a new name to
+the function we are mutating. """
     counter = -1
     living_foos = list()
 
@@ -167,8 +179,14 @@ class ChangeFooName(ast.NodeTransformer):
             node.id = self.current_name()
         return node
 
-    
+#############################################################
+
 class SelfHealer():
+    """ TODO: questa classe serve davvero? Sostanzialmente:
+1. Prende una lista di Mutators
+2. Per ognuno di essi crea i nuovi AST
+3. Cambia i nomi delle funzioni generate
+""" 
     def __init__(self, mutators, original_name_foo=None):
         self.mutators = mutators
         self.foo_name = original_name_foo
@@ -194,7 +212,7 @@ class SelfHealer():
         return mutants
 
 # =========================================================== #
-
+# Default mutators. Useful, but maybe TODO move it to UTILS
 
 m1 = Mutator(check_Binop_math, trans_Binop_math)
 m2 = Mutator(check_Binop_left_right, trans_Binop_left_right)
@@ -208,20 +226,21 @@ default_mutators = [m1,m2,m3,m4,m5,m6]
 # =========================================================== #
 # =========================================================== #
 
-
-
 @dataclass
 class RichFunction:
-    func: Callable
-    name: str
-    src_code: str
-    ast: ast.AST
-    score: float
+    """ An enriched function wraps useful meta-data around
+an otherwise normal Callable. """
+    func: Callable # The actual function
+    name: str      # Function name
+    src_code: str  # Function src_code 
+    ast: ast.AST   # Function AST (not used)
+    score: float   # Function PBT score 
 
     def __repr__(self):
         return f"{self.name} - {self.score}"
 
 
+# =========================================================== #
 
 
 def single_heal(foo: RichFunction, mutators: List[Mutator],
@@ -280,8 +299,10 @@ def single_heal(foo: RichFunction, mutators: List[Mutator],
     return (found_correct, stats)
         
 
-def hospitalization(foo: RichFunction, mutators: List[Mutator],
-                    pbt: Callable, max_iters=2):
+def hospitalization(
+        foo: RichFunction, mutators: List[Mutator],
+        pbt: Callable, max_iters=2):
+    
     """ Multiple rounds of healing. """
     
     found_correct, today_stats = single_heal(foo, mutators, pbt)
@@ -295,7 +316,7 @@ def hospitalization(foo: RichFunction, mutators: List[Mutator],
     if max_iters <= 0:
         return [sorted_foos[0]]
     
-    # Qua potresi eliminare da glovals() le foos che non usi più...
+    # TODO: remove unused sort_23_253_554 functions and the likes!
 
     results = list()
     for chosen_foo in sorted_foos:
@@ -303,16 +324,7 @@ def hospitalization(foo: RichFunction, mutators: List[Mutator],
         results.append(rec_out)
 
     flatten_results = [r for r_ in results for r in r_]
-    perfect_scores = [r for r in flatten_results if r.score > 0.99]
+    perfect_scores  = [r for r in flatten_results if r.score > 0.99]
     if perfect_scores:
         return perfect_scores
     return sorted(flatten_results, key=lambda x: x[0].score)
-    
-# heal(sort, "sort")
-
-# from hypothesis import given
-# import hypothesis.strategies as st
-
-# @given(l=st.lists(st.integers()))
-# def test_decode_inverts_encode(foo, l):
-#     assert is_sorted(foo(l))
